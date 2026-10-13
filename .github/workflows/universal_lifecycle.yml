@@ -1,0 +1,58 @@
+name: Khuôn Mẫu Vòng Đời Nút Mạng Chuẩn
+
+on:
+  workflow_call:
+    inputs:
+      engine_script:
+        description: "Tên tệp động cơ cần chạy (ví dụ: stigmergy_engine.py, retina_engine.py)"
+        required: true
+        type: string
+      bot_name:
+        description: "Tên bot thực hiện commit"
+        required: false
+        type: string
+        default: "Autonomous-Mesh-Bot"
+
+jobs:
+  run-node:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kéo mã nguồn nút mạng
+        uses: actions/checkout@v4
+
+      - name: Thiết lập Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # 1. TỰ ĐỘNG CHẠY XÚC TU VÀ MÀNG LỌC NẾU CÓ
+      - name: Dò tìm và lọc tín hiệu thụ thể
+        env:
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_PARENT: ${{ github.event.repository.parent.owner.login }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          [ -f receptors/cascade_receptor.py ] && python receptors/cascade_receptor.py || true
+          [ -f receptors/mesh_receptor.py ] && python receptors/mesh_receptor.py || true
+          [ -f receptors/contract_receptor.py ] && python receptors/contract_receptor.py || true
+
+      # 2. VẬN HÀNH ĐỘNG CƠ CỤ THỂ CỦA NÚT MẠNG ĐÓ
+      - name: Vận hành Động cơ Hạt nhân
+        run: python ${{ inputs.engine_script }}
+
+      # 3. LƯU TRẠNG THÁI BẰNG CHIẾN THUẬT FAST-FORWARD CHỐNG CONFLICT
+      - name: Lưu vết tích tiến hóa phân tán
+        run: |
+          git config --global user.name "${{ inputs.bot_name }}"
+          git config --global user.email "bot@bodhi.mesh"
+          
+          git fetch origin main
+          git reset origin/main
+          git add synapses/ synapse_forward.json synapse_backward.json 2>/dev/null || true
+          
+          if ! git diff --staged --quiet; then
+            git commit -m "🧬 [Tiến Hóa Tự Trị] Cập nhật trạng thái nút mạng [skip ci]"
+            git push origin main
+          else
+            echo "Không có biến đổi mới."
+          fi
